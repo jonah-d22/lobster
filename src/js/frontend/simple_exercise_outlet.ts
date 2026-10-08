@@ -1,28 +1,9 @@
 
 export function createSimpleExerciseOutlet(id: string) {
     return $(`
-        <div class="lobster-ex-checkpoints panel panel-default" style="margin-top: 0.5em;">
-            <div class="panel-heading"></div>
-            <div class="panel-body">
-                
-            </div>
-        </div>
         <ul style="position: relative;" class="lobster-simulation-outlet-tabs nav nav-tabs">
-            <div style="position: relative; float: right; margin-top: 5px; z-index: 10;">
-                <button id="lobster-edit-project-modal-button" class="btn btn-primary-muted" data-toggle="modal" data-target="#lobster-edit-project-modal" >
-                    <i class="bi bi-pencil-square"></i> <span id="lobster-project-name"></span>
-                </button>
-                <button id="lobster-edit-exercise-modal-button" class="btn btn-primary-muted" data-toggle="modal" data-target="#lobster-edit-exercise-modal" >
-                    <i class="bi bi-pencil-square"></i> Exercise</span>
-                </button>
-                <button id="lobster-personal-copy-button" class="btn btn-primary-muted" >
-                    <i class="bi bi-files"></i> Make A Personal Copy</span>
-                </button>
-                <div style="display: inline-block" class = "lobster-project-save-outlet"></div>
-            </div>
             <li class="active"><a class="lobster-source-tab" data-toggle="tab" href="#lobster-ex-${id}-source-pane">Source Code</a></li>
             <li><a class="lobster-simulate-tab" data-toggle="tab" href="#lobster-ex-${id}-sim-pane">Simulation</a></li>
-
         </ul>
 
         <div class="tab-content lobster-simulation-height" style="overflow: hidden;">
@@ -71,7 +52,7 @@ export function createSimpleExerciseOutlet(id: string) {
                 <table style="width: 100%; height: 100%; margin-top: 5px; ">
                     <tr>
                         <td style="min-width: 260px; width: 260px; max-width: 260px; vertical-align: top; height: 100%">
-                            <div class="lobster-simulation-height" style="position: relative; display: flex; flex-direction: column;">
+                            <div class="lobster-simulation-height" style="position: relative; display: flex; flex-direction: column; overflow-y: auto; min-height: 0;">
                                 <div style="margin-bottom: 5px;">
                                     <button class = "lobster-return-to-source btn btn-primary-muted" style="width: 100%; padding: 6px 6px;">Return to Source Code</button>
                                 </div>
@@ -100,7 +81,11 @@ export function createSimpleExerciseOutlet(id: string) {
                                 </div>
                                 <div class="lobster-cin-buffer" style = "margin-top: 5px;"></div>
                                 <div style = "margin-top: 5px; text-align: center;">Memory</div>
-                                <div style="overflow-y: auto; overflow-x: hidden; flex-grow: 1;"><div style="height: 300px;" class="lobster-memory readOnly"></div></div>
+                                <div style="overflow-y: auto; overflow-x: hidden; flex: 1 0 300px;"><div style="height: 300px;" class="lobster-memory readOnly"></div></div>
+                                <div class="lobster-memcheck" style="margin-top: 5px; flex: 0 0 auto;">
+                                    <div style="font-size: 9pt; font-weight: bold; margin-bottom: 3px;">Lobster Memory Check</div>
+                                    <pre class="lobster-memcheck-contents" style="margin: 0; white-space: pre-wrap; font-size: 8pt; line-height: 1.35; background: #111; color: #dfe6e9; padding: 6px; border-radius: 3px; border: 1px solid #444; min-height: 110px; overflow: auto;">Run or step the program to check its modeled memory state.</pre>
+                                </div>
 
                             </div>
                         </td>

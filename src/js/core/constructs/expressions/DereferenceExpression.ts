@@ -98,26 +98,30 @@ export class RuntimeDereferenceExpression<T extends CompleteObjectType> extends 
 
         // If it's a null pointer, give message
         if (PointerType.isNull(addr)) {
-            this.sim.eventOccurred(SimulationEvent.CRASH, "Ow! Your code just dereferenced a null pointer!", true);
+            this.sim.memoryIssueOccurred("invalid access", "A null pointer was dereferenced.", SimulationEvent.CRASH);
         }
         else if (PointerType.isNegative(addr)) {
-            this.sim.eventOccurred(SimulationEvent.CRASH, "Uh, wow. The pointer you're trying to dereference has a negative address.\nThanks a lot.", true);
+            this.sim.memoryIssueOccurred("invalid access", "A pointer with a negative address was dereferenced.", SimulationEvent.CRASH);
         }
         else if (ptr.type.isArrayPointerType()) {
             // If it's an array pointer, make sure it's in bounds and not one-past
             if (addr < ptr.type.min()) {
-                this.sim.eventOccurred(SimulationEvent.UNDEFINED_BEHAVIOR, "That pointer has wandered off the beginning of its array. Dereferencing it might cause a segfault, or worse - you might just access/change other memory outside the array.", true);
+                this.sim.memoryIssueOccurred("out-of-bounds access", "A pointer before the beginning of its array was dereferenced.");
             }
             else if (ptr.type.onePast() < addr) {
-                this.sim.eventOccurred(SimulationEvent.UNDEFINED_BEHAVIOR, "That pointer has wandered off the end of its array. Dereferencing it might cause a segfault, or worse - you might just access/change other memory outside the array.", true);
+                this.sim.memoryIssueOccurred("out-of-bounds access", "A pointer beyond the end of its array was dereferenced.");
             }
             else if (addr == ptr.type.onePast()) {
                 // TODO: technically this is not undefined behavior unless the result of the dereference undergoes an lvalue-to-rvalue conversion to look up the object
-                this.sim.eventOccurred(SimulationEvent.UNDEFINED_BEHAVIOR, "That pointer is one past the end of its array. Do you have an off-by-one error?. Dereferencing it might cause a segfault, or worse - you might just access/change other memory outside the array.", true);
+                this.sim.memoryIssueOccurred("out-of-bounds access", "A one-past-the-end pointer was dereferenced.");
             }
         }
 
         var obj = this.sim.memory.dereference(ptr);
+        const freedAllocation = this.sim.memory.findDynamicObjectContainingAddress(addr);
+        if (freedAllocation && !freedAllocation.isAlive) {
+            this.sim.memoryIssueOccurred("use after free", "A pointer to a deallocated heap object was dereferenced.");
+        }
 
         // Note: dead object is not necessarily invalid. Invalid has to do with the value
         // while dead/alive has to do with the object itself. Reading from dead object does

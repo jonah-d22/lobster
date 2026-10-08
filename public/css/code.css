@@ -435,7 +435,7 @@
     /*border-bottom: solid 1px black;*/
 }
 .code-simStack > div:last-child {
-    padding: 2px;
+    display: inline-block;
     border-bottom: none;
 }
 
@@ -449,6 +449,8 @@
     position: relative;
     padding: 2px;
     font-family: monospace;
+    display: inline;
+    margin-left: 1ch;
     text-align: right;
     width: 100%;
     overflow-y: auto;
@@ -464,6 +466,25 @@
     border: solid 1px black;
 }
 
+.code-memoryStack,
+.code-memoryHeap,
+.code-memoryTemporaryObjects {
+    box-sizing: border-box;
+    display: flex;
+    flex: 1 0 210px;
+    flex-direction: column;
+    min-width: 210px;
+    max-width: 320px;
+    margin: 0;
+    text-align: left;
+}
+
+.code-memoryStack > div:not(.header),
+.code-memoryHeap > div:not(.header),
+.code-memoryTemporaryObjects > div:not(.header) {
+    flex: 1 1 auto;
+}
+
 .code-stackFrame{
     padding: 2px;
     border: solid 1px rgba(0,0,0,0.3);
@@ -476,11 +497,108 @@
 }
 
 .lobster-memory .header{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     text-align: left;
     font-size: 8pt;
     padding-left: 1ch;
     padding-right: 1ch;
     white-space: nowrap;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    background: #3f3f3f;
+}
+
+.memory-column-usage {
+    color: #c6d99a;
+    font-size: 7pt;
+    text-align: right;
+}
+
+.memory-column-headings,
+.memory-data-row {
+    display: grid;
+    grid-template-columns: minmax(7ch, 0.9fr) minmax(9ch, 1.1fr) minmax(8ch, 1.3fr) minmax(5ch, 0.6fr);
+    column-gap: 4px;
+    align-items: start;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.memory-column-headings {
+    padding: 3px 2px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+    color: #cbd0d8;
+    font-size: 7pt;
+    font-weight: bold;
+}
+
+.memory-column-headings > span:last-child,
+.memory-size {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.memory-data-row {
+    gap: 4px;
+    padding: 3px 2px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    text-align: left;
+    white-space: normal;
+}
+
+.memory-address,
+.memory-variable,
+.memory-value,
+.memory-size {
+    min-width: 0;
+}
+
+.memory-variable {
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.memory-address {
+    color: #9da3ab;
+    font-size: 7pt;
+    overflow-wrap: anywhere;
+}
+
+.memory-variable .memory-variable-name {
+    display: block;
+    margin: 0;
+    text-align: left;
+}
+
+.memory-variable-type {
+    overflow: hidden;
+    color: #b9c0c8;
+    font-size: 7pt;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.memory-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.memory-size {
+    color: #c6d99a;
+    font-size: 7pt;
+}
+
+.memory-expanded {
+    grid-column: 1 / -1;
+    min-width: 0;
+    padding-left: 1ch;
+}
+
+.memory-value-summary {
+    color: #b9c0c8;
+    font-size: 7pt;
 }
 
 .lobster-memory .header > span.button {
@@ -515,6 +633,19 @@
     color: #f8f8f2;
 }
 
+.code-memoryStack,
+.code-memoryHeap,
+.code-memoryTemporaryObjects {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    margin: 0 0 8px;
+    padding: 2px;
+    border: solid 1px rgba(0, 0, 0, 0.3);
+    background: #272822;
+    color: #f8f8f2;
+}
+
 .code-memoryObject{
     display: block;
     /*font-size: 8pt;*/
@@ -526,6 +657,12 @@
     white-space: nowrap;
     overflow: hidden;
 }
+
+.code-memoryObject.memory-data-row {
+    display: grid;
+    white-space: normal;
+}
+
 .code-memoryObject.array{
     display: inline-block;
     /*width: 70px;*/
@@ -630,18 +767,9 @@
 }
 
 
-.code-memoryObject-array {
-    display: flex;
-    flex-direction: row;
-}
-
-.code-memoryObject-array-left {
-    flex: 0 0 auto;
-    text-align: right;
-}
-
 .code-memoryObject-array-elements {
-    flex: 1 1 auto;
+    grid-column: 3;
+    min-width: 0;
     white-space: normal;
 }
 

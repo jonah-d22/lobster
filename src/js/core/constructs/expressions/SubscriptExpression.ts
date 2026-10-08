@@ -121,24 +121,28 @@ export class RuntimeSubscriptExpression<T extends CompleteObjectType = CompleteO
         let addr = ptr.rawValue;
 
         if (PointerType.isNegative(addr)) {
-            this.sim.eventOccurred(SimulationEvent.CRASH, "Good work. You subscripted so far backwards off the beginning of the array you went to a negative address. -__-", true);
+            this.sim.memoryIssueOccurred("invalid access", "A pointer with a negative address was subscripted.", SimulationEvent.CRASH);
         }
         else if (ptr.type.isArrayPointerType()) {
             // If it's an array pointer, make sure it's in bounds and not one-past
             if (addr < ptr.type.min()) {
-                this.sim.eventOccurred(SimulationEvent.UNDEFINED_BEHAVIOR, "That subscript operation goes off the beginning of the array. This could cause a segfault, or worse - you might just access/change other memory outside the array.", true);
+                this.sim.memoryIssueOccurred("out-of-bounds access", "An array subscript accessed before the beginning of the array.");
             }
             else if (ptr.type.onePast() < addr) {
-                this.sim.eventOccurred(SimulationEvent.UNDEFINED_BEHAVIOR, "That subscript operation goes off the end of the array. This could cause a segfault, or worse - you might just access/change other memory outside the array.", true);
+                this.sim.memoryIssueOccurred("out-of-bounds access", "An array subscript accessed beyond the end of the array.");
             }
             else if (addr == ptr.type.onePast()) {
                 // TODO: technically this is not undefined behavior unless the result of the dereference undergoes an lvalue-to-rvalue conversion to look up the object
-                this.sim.eventOccurred(SimulationEvent.UNDEFINED_BEHAVIOR, "That subscript accesses the element one past the end of the array. This could cause a segfault, or worse - you might just access/change other memory outside the array.", true);
+                this.sim.memoryIssueOccurred("out-of-bounds access", "An array subscript accessed the one-past-the-end element.");
             }
 
         }
 
         var obj = this.sim.memory.dereference(ptr);
+        const freedAllocation = this.sim.memory.findDynamicObjectContainingAddress(addr);
+        if (freedAllocation && !freedAllocation.isAlive) {
+            this.sim.memoryIssueOccurred("use after free", "A pointer to a deallocated heap object was subscripted.");
+        }
 
         // // Note: dead object is not necessarily invalid. Invalid has to do with the value
         // // while dead/alive has to do with the object itself. Reading from dead object does

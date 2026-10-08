@@ -4,7 +4,6 @@ import { Simulation } from "../core/runtime/Simulation";
 import { AsynchronousSimulationRunner } from "../core/runtime/simulationRunners";
 import { MessageResponses, listenTo, stopListeningTo, messageResponse, Message } from "../util/observe";
 import { assert, Mutable } from "../util/util";
-import { CheckpointsOutlet } from "./CheckpointOutlets";
 import { ProjectEditor, CompilationOutlet, CompilationStatusOutlet } from "./editors";
 import { SimulationOutlet } from "./simOutlets";
 import { MemoryOutlet } from "./memory/MemoryOutlet";

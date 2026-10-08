@@ -3,7 +3,7 @@ import { listenTo, MessageResponses, messageResponse, Message } from "../../util
 import { CPPObject } from "../../core/runtime/objects";
 import { CPP_ANIMATIONS } from "../constructs/common";
 import { OutletCustomizations, SLIDE_DURATION } from "../simOutlets";
-import { createMemoryObjectOutlet } from "./MemoryObjectOutlets";
+import { createMemoryColumnHeadings, createMemoryObjectOutlet } from "./MemoryObjectOutlets";
 import { MemoryOutlet } from "./MemoryOutlet";
 import { TemporaryObjectsCustomization } from "./StackFrameOutlet";
 
@@ -14,6 +14,7 @@ export class TemporaryObjectsOutlet {
     private readonly element: JQuery;
     private readonly memoryOutlet: MemoryOutlet;
     private readonly objectsElem: JQuery;
+    private readonly usageElem: JQuery;
     private objectElems: { [index: number]: JQuery; } = {};
 
     public readonly memory: Memory;
@@ -29,10 +30,12 @@ export class TemporaryObjectsOutlet {
 
         this.customizations = OutletCustomizations.temporaryObjects;
 
-        let header = $("<div class='header'>Temporary Objects</div>");
+        let header = $("<div class='header'><span>Temporaries</span><span class='memory-column-usage'></span></div>");
+        this.usageElem = header.find(".memory-column-usage");
         this.element.append(header);
 
         this.objectsElem = $("<div></div>");
+        this.objectsElem.append(createMemoryColumnHeadings());
         this.element.append(this.objectsElem);
 
         let minimizeButton = $("<span class='button'></span>");
@@ -59,26 +62,35 @@ export class TemporaryObjectsOutlet {
 
         listenTo(this, memory);
 
-
         this.objectElems = {};
+
+        memory.allLiveObjects()
+            .filter(obj => obj.hasStorage("temporary"))
+            .forEach(obj => this.addTemporaryObject(obj));
+        this.updateUsage();
 
         return this;
     }
 
     @messageResponse("temporaryObjectAllocated")
     private temporaryObjectAllocated(msg: Message<CPPObject>) {
-        var obj = msg.data;
-        var elem = $("<div style='display: none'></div>");
+        this.addTemporaryObject(msg.data);
+    }
+
+    private addTemporaryObject(obj: CPPObject) {
+        if (this.objectElems[obj.address]) {
+            return;
+        }
+
+        var elem = $("<div></div>");
         createMemoryObjectOutlet(elem, obj, this.memoryOutlet);
 
         this.objectElems[obj.address] = elem;
         this.objectsElem.prepend(elem);
         if (CPP_ANIMATIONS) {
-            elem.slideDown(SLIDE_DURATION);
+            elem.css({ opacity: 0 }).animate({ opacity: 1 }, SLIDE_DURATION);
         }
-        else {
-            elem.css({ display: "block" });
-        }
+        this.updateUsage();
     }
 
     @messageResponse("temporaryObjectDeallocated")
@@ -90,12 +102,20 @@ export class TemporaryObjectsOutlet {
             });
             delete this.objectElems[addr];
         }
+        this.updateUsage();
+    }
+
+    private updateUsage() {
+        const liveObjects = this.memory.allLiveObjects().filter(obj => obj.hasStorage("temporary"));
+        const usedBytes = liveObjects.reduce((total, obj) => total + obj.size, 0);
+        this.usageElem.text(`${usedBytes} modeled bytes`);
     }
 
     @messageResponse("reset")
     private reset() {
         this.objectElems = {};
         this.objectsElem.children().remove();
+        this.updateUsage();
     }
 
 }

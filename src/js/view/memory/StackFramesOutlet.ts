@@ -4,6 +4,7 @@ import { CPP_ANIMATIONS } from "../constructs/common";
 import { FADE_DURATION, SLIDE_DURATION } from "../simOutlets";
 import { MemoryOutlet } from "./MemoryOutlet";
 import { StackFrameOutlet } from "./StackFrameOutlet";
+import { createMemoryColumnHeadings } from "./MemoryObjectOutlets";
 
 
 
@@ -12,6 +13,7 @@ export class StackFramesOutlet {
     private readonly element: JQuery;
     private readonly memoryOutlet: MemoryOutlet;
     private readonly framesElem: JQuery;
+    private readonly usageElem: JQuery;
     private readonly frameElems: JQuery[] = [];
 
     public readonly memory: Memory;
@@ -29,13 +31,16 @@ export class StackFramesOutlet {
 
         this.element.addClass("code-memoryStack");
 
-        let header = $("<div class='header'>The Stack</div>");
+        let header = $("<div class='header'><span>Stack</span><span class='memory-column-usage'></span></div>");
+        this.usageElem = header.find(".memory-column-usage");
         this.element.append(header);
+        this.element.append(createMemoryColumnHeadings());
 
         this.framesElem = $('<div></div>');
         this.element.append(this.framesElem);
 
         this.memory.stack.frames.forEach(frame => this.pushFrame(frame));
+        this.updateUsage();
     }
 
     private pushFrame(frame: MemoryFrame) {
@@ -46,6 +51,7 @@ export class StackFramesOutlet {
 
         this.frameElems.push(frameElem);
         this.framesElem.prepend(frameElem);
+        this.updateUsage();
         if (frame.func.model.context.isLibrary) {
             // leave display as none
         }
@@ -73,6 +79,12 @@ export class StackFramesOutlet {
             let popped = this.frameElems.pop()!;
             popped.remove();
         }
+        this.updateUsage();
+    }
+
+    private updateUsage() {
+        const usedBytes = this.memory.stack.frames.reduce((total, frame) => total + frame.size, 0);
+        this.usageElem.text(`${usedBytes} modeled bytes`);
     }
 
     @messageResponse("framePopped")
@@ -84,5 +96,6 @@ export class StackFramesOutlet {
     private reset() {
         this.frameElems.length = 0;
         this.framesElem.children("div").remove();
+        this.updateUsage();
     }
 }
