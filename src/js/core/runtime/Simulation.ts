@@ -70,6 +70,7 @@ export type SimulationOutput =
 export interface MemoryIssue {
     kind: string;
     message: string;
+    address?: number;
 }
 
 export type SimulationMessages =
@@ -638,8 +639,8 @@ export class Simulation {
         this.observable.send("eventOccurred", { event, message });
     }
 
-    public memoryIssueOccurred(kind: string, message: string, event: SimulationEvent = SimulationEvent.UNDEFINED_BEHAVIOR) {
-        this._memoryIssues.push({ kind, message });
+    public memoryIssueOccurred(kind: string, message: string, event: SimulationEvent = SimulationEvent.UNDEFINED_BEHAVIOR, address?: number) {
+        this._memoryIssues.push({ kind, message, address });
         this.eventOccurred(event, message);
     }
 
@@ -679,6 +680,18 @@ export class Simulation {
         ].join('\n');
     }
 
+    public getMemoryCheckDisplay(): string {
+        const addresses = [...new Set(this.memoryIssues
+            .map(issue => issue.address)
+            .filter((address): address is number => address !== undefined))]
+            .map(toHexadecimalString);
+
+        return [
+            `Memory issues detected: ${this.memoryIssues.length}`,
+            `Addresses: ${addresses.length ? addresses.join(', ') : 'none'}`
+        ].join('\n');
+    }
+
     private memoryLeaksRecorded = false;
 
     private isMainReturned() {
@@ -697,7 +710,7 @@ export class Simulation {
         allocations.filter(obj => !reachable.has(obj)).forEach(obj => {
             this._unreachableAllocations.push(obj);
             const message = `Unreachable heap allocation of ${obj.type} at ${toHexadecimalString(obj.address)}.`;
-            this._memoryIssues.push({ kind: 'memory leak', message });
+            this._memoryIssues.push({ kind: 'memory leak', message, address: obj.address });
             this.eventOccurred(SimulationEvent.MEMORY_LEAK, message);
         });
         this.memoryLeaksRecorded = true;
@@ -919,4 +932,3 @@ export class Simulation {
     //     return true;
     // },
 }
-

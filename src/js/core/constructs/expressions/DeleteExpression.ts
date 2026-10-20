@@ -119,22 +119,22 @@ export class RuntimeDeleteExpression extends RuntimeExpression<VoidType, "prvalu
                 : this.sim.memory.dereference(pointer);
 
             if (pointer.type.isArrayPointerType() && pointer.rawValue !== obj.address) {
-                this.sim.memoryIssueOccurred("invalid free", "delete was applied to an interior pointer rather than the start of an allocation.");
+                this.sim.memoryIssueOccurred("invalid free", "delete was applied to an interior pointer rather than the start of an allocation.", undefined, pointer.rawValue);
                 this.startCleanup();
                 return;
             }
             else if (!obj.hasStorage("dynamic")) {
-                this.sim.memoryIssueOccurred("invalid free", "delete was applied to an object that was not allocated with new.");
+                this.sim.memoryIssueOccurred("invalid free", "delete was applied to an object that was not allocated with new.", undefined, pointer.rawValue);
                 this.startCleanup();
                 return;
             }
             else if (!obj.isAlive) {
-                this.sim.memoryIssueOccurred("double free", "delete was applied to an already deallocated object.");
+                this.sim.memoryIssueOccurred("double free", "delete was applied to an already deallocated object.", undefined, pointer.rawValue);
                 this.startCleanup();
                 return;
             }
             else if (obj.isTyped(isBoundedArrayType)) {
-                this.sim.memoryIssueOccurred("mismatched deallocation", "delete was used for an array allocated with new[].");
+                this.sim.memoryIssueOccurred("mismatched deallocation", "delete was used for an array allocated with new[].", undefined, pointer.rawValue);
                 this.startCleanup();
                 return;
             }
@@ -278,22 +278,22 @@ export class RuntimeDeleteArrayExpression extends RuntimeExpression<VoidType, "p
                 : this.sim.memory.dereference(ptr);
 
             if (ptr.rawValue !== targetObject.address) {
-                this.sim.memoryIssueOccurred("invalid free", "delete[] was applied to an interior pointer rather than the start of an allocation.");
+                this.sim.memoryIssueOccurred("invalid free", "delete[] was applied to an interior pointer rather than the start of an allocation.", undefined, ptr.rawValue);
                 this.startCleanup();
                 return;
             }
             else if (!targetObject.hasStorage("dynamic")) {
-                this.sim.memoryIssueOccurred("invalid free", "delete[] was applied to an object that was not allocated with new[].");
+                this.sim.memoryIssueOccurred("invalid free", "delete[] was applied to an object that was not allocated with new[].", undefined, ptr.rawValue);
                 this.startCleanup();
                 return;
             }
             else if (!targetObject.isAlive) {
-                this.sim.memoryIssueOccurred("double free", "delete[] was applied to an already deallocated object.");
+                this.sim.memoryIssueOccurred("double free", "delete[] was applied to an already deallocated object.", undefined, ptr.rawValue);
                 this.startCleanup();
                 return;
             }
             else if (!targetObject.isTyped(isBoundedArrayType)) {
-                this.sim.memoryIssueOccurred("mismatched deallocation", "delete[] was used for an object allocated with new.");
+                this.sim.memoryIssueOccurred("mismatched deallocation", "delete[] was used for an object allocated with new.", undefined, ptr.rawValue);
                 this.startCleanup();
                 return;
             }

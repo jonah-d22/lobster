@@ -179,9 +179,10 @@
 
 .codeInstance.statement.upNext > .lobster-highlight,
 .codeInstance.statement.wait > .lobster-highlight {
+    left: calc(-0.4ch - 6px);
     opacity: 1;
     border-left-style: solid;
-    border-left-width: 2px;
+    border-left-width: 8px;
     border-left-color: #006FDE;
 }
 
@@ -524,6 +525,20 @@
     align-items: start;
     box-sizing: border-box;
     width: 100%;
+}
+
+.heap-column-headings,
+.heap-allocation-row {
+    grid-template-columns: minmax(7ch, 0.9fr) minmax(8ch, 1.3fr) minmax(5ch, 0.6fr);
+}
+
+.heap-column-headings > span:nth-child(2),
+.heap-allocation-row > .memory-variable {
+    display: none;
+}
+
+.heap-allocation-row > .code-memoryObject-array-elements {
+    grid-column: 2;
 }
 
 .memory-column-headings {

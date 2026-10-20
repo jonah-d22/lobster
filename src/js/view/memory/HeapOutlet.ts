@@ -28,7 +28,7 @@ export class HeapOutlet {
         let header = $("<div class='header'><span>Heap</span><span class='memory-column-usage'></span></div>");
         this.usageElem = header.find(".memory-column-usage");
         this.element.append(header);
-        this.element.append(createMemoryColumnHeadings());
+        this.element.append(createMemoryColumnHeadings().addClass("heap-column-headings"));
 
         this.objectsElem = $("<div></div>");
         this.element.append(this.objectsElem);
@@ -49,6 +49,7 @@ export class HeapOutlet {
     private heapObjectAllocated(obj: DynamicObject) {
         var elem = $("<div></div>");
         createMemoryObjectOutlet(elem, obj, this.memoryOutlet);
+        elem.addClass("heap-allocation-row");
 
         this.objectElems[obj.address] = elem;
         this.objectsElem.prepend(elem);

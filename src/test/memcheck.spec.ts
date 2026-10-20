@@ -24,6 +24,10 @@ describe('modeled memory check', () => {
     expect(report).to.include('Unreachable at end of main: 1 blocks');
     expect(report).to.include(toHexadecimalString(allocation.address));
     expect(report).not.to.include(allocation.toString());
+    expect(sim.getMemoryCheckDisplay()).to.equal([
+      'Memory issues detected: 1',
+      `Addresses: ${toHexadecimalString(allocation.address)}`
+    ].join('\n'));
     expect(sim.memoryIssues.some(issue => issue.kind === 'memory leak')).to.equal(true);
   });
 
@@ -76,8 +80,13 @@ describe('modeled memory check', () => {
 
   it('reports use after free', () => {
     const sim = runProgram('int main() { int* p = new int(7); delete p; return *p; }');
+    const issue = sim.memoryIssues.find(issue => issue.kind === 'use after free')!;
 
-    expect(sim.memoryIssues.some(issue => issue.kind === 'use after free')).to.equal(true);
+    expect(issue.address).to.be.a('number');
+    expect(sim.getMemoryCheckDisplay()).to.equal([
+      'Memory issues detected: 1',
+      `Addresses: ${toHexadecimalString(issue.address!)}`
+    ].join('\n'));
   });
 
   it('reports double free', () => {

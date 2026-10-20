@@ -204,7 +204,7 @@ export class SimulationOutlet {
             return;
         }
 
-        this.memcheckContentsElem.text(this.sim.getMemoryCheckSummary());
+        this.memcheckContentsElem.text(this.sim.getMemoryCheckDisplay());
     }
 
     private refreshSimulation() {
@@ -362,7 +362,7 @@ export class SimulationOutlet {
         while (!checkSimulation.atEnd && checkSimulation.top()?.model !== checkSimulation.program.mainFunction) {
             await checkRunner.stepForward();
         }
-        this.memcheckContentsElem.text(checkSimulation.getMemoryCheckSummary());
+        this.memcheckContentsElem.text(checkSimulation.getMemoryCheckDisplay());
     }
         
     // private async skipToEnd() {
@@ -951,7 +951,6 @@ export class CodeStackOutlet extends RunningCodeOutlet {
         }
     }
 }
-
 
 
 

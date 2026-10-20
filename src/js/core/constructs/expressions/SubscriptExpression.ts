@@ -121,19 +121,19 @@ export class RuntimeSubscriptExpression<T extends CompleteObjectType = CompleteO
         let addr = ptr.rawValue;
 
         if (PointerType.isNegative(addr)) {
-            this.sim.memoryIssueOccurred("invalid access", "A pointer with a negative address was subscripted.", SimulationEvent.CRASH);
+            this.sim.memoryIssueOccurred("invalid access", "A pointer with a negative address was subscripted.", SimulationEvent.CRASH, addr);
         }
         else if (ptr.type.isArrayPointerType()) {
             // If it's an array pointer, make sure it's in bounds and not one-past
             if (addr < ptr.type.min()) {
-                this.sim.memoryIssueOccurred("out-of-bounds access", "An array subscript accessed before the beginning of the array.");
+                this.sim.memoryIssueOccurred("out-of-bounds access", "An array subscript accessed before the beginning of the array.", undefined, addr);
             }
             else if (ptr.type.onePast() < addr) {
-                this.sim.memoryIssueOccurred("out-of-bounds access", "An array subscript accessed beyond the end of the array.");
+                this.sim.memoryIssueOccurred("out-of-bounds access", "An array subscript accessed beyond the end of the array.", undefined, addr);
             }
             else if (addr == ptr.type.onePast()) {
                 // TODO: technically this is not undefined behavior unless the result of the dereference undergoes an lvalue-to-rvalue conversion to look up the object
-                this.sim.memoryIssueOccurred("out-of-bounds access", "An array subscript accessed the one-past-the-end element.");
+                this.sim.memoryIssueOccurred("out-of-bounds access", "An array subscript accessed the one-past-the-end element.", undefined, addr);
             }
 
         }
@@ -141,7 +141,7 @@ export class RuntimeSubscriptExpression<T extends CompleteObjectType = CompleteO
         var obj = this.sim.memory.dereference(ptr);
         const freedAllocation = this.sim.memory.findDynamicObjectContainingAddress(addr);
         if (freedAllocation && !freedAllocation.isAlive) {
-            this.sim.memoryIssueOccurred("use after free", "A pointer to a deallocated heap object was subscripted.");
+            this.sim.memoryIssueOccurred("use after free", "A pointer to a deallocated heap object was subscripted.", undefined, addr);
         }
 
         // // Note: dead object is not necessarily invalid. Invalid has to do with the value

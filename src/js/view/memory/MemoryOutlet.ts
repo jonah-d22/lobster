@@ -230,7 +230,7 @@ export class SVGPointerArrowMemoryOverlay extends SVGMemoryOverlay {
     private getPointerArrowOffsets(pointerElem: JQuery, targetElem: JQuery) {
 
         let endOffset = targetElem.offset()!;
-        endOffset.left += targetElem.outerWidth()! - 3;
+        endOffset.left += targetElem.outerWidth()! / 2;
         endOffset.top += targetElem.outerHeight()! / 2;
         let startOffset = pointerElem.offset()!;
         startOffset.left += pointerElem.outerWidth()! / 2;
