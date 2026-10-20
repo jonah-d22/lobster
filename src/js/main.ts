@@ -3,19 +3,15 @@ import "./lib/standard";
 import { Project } from "./core/Project";
 import { SimpleExerciseLobsterOutlet } from "./view/SimpleExerciseLobsterOutlet";
 import { createSimpleExerciseOutlet } from "./frontend/simple_exercise_outlet";
+import { MEMORY_LEAK_EXERCISES } from "./frontend/memory_leak_exercises";
 
 $(async () => {
     const project = new Project(
-        "Demo",
+        "Memory Leak Fix-It",
         undefined,
         [{
             name: "main.cpp",
-            code: `#include <iostream>
-using namespace std;
-
-int main() {
-  cout << "Hello, world!" << endl;
-}`,
+            code: MEMORY_LEAK_EXERCISES[0].code,
             isTranslationUnit: true
         }]
     );

@@ -65,7 +65,7 @@ export class MemoryOutlet {
         this.element = element.addClass("lobster-memory");
 
         this.svgElem = $('<div style="position: absolute; left:0; right:0; top: 0; bottom: 0; pointer-events: none; z-index: 10"></div>');
-        this.svg = SVG.SVG().addTo(this.svgElem[0]);
+        this.svg = SVG.SVG().size("100%", "100%").addTo(this.svgElem[0]);
         this.SVG_DEFS = {
             arrowStart: this.svg.marker(3, 3, function (add) {
                 add.circle(3).fill({ color: '#fff' });
@@ -83,6 +83,10 @@ export class MemoryOutlet {
 
     public dispose() {
         clearInterval(this.svgUpdateThread);
+    }
+
+    public refreshSvg() {
+        this.updateSvg();
     }
 
     public setMemory(memory: Memory) {
@@ -220,27 +224,23 @@ export class SVGPointerArrowMemoryOverlay extends SVGMemoryOverlay {
         let { startOffset, endOffset } = this.getPointerArrowOffsets(pointerValueElem, targetElem);
 
         this.line.plot(startOffset.left, startOffset.top, endOffset.left, endOffset.top);
-        // this.line.marker("start", this.memoryOutlet.SVG_DEFS.arrowStart);
-        // this.line.marker("end", this.memoryOutlet.SVG_DEFS.arrowEnd);
         this.line.show();
 
         return true;
     }
 
     private getPointerArrowOffsets(pointerElem: JQuery, targetElem: JQuery) {
-
-        let endOffset = targetElem.offset()!;
-        endOffset.left += targetElem.outerWidth()! / 2;
-        endOffset.top += targetElem.outerHeight()! / 2;
-        let startOffset = pointerElem.offset()!;
-        startOffset.left += pointerElem.outerWidth()! / 2;
-        startOffset.top += pointerElem.outerHeight()!;
-
-        let svgElemOffset = this.memoryOutlet.svgElem.offset()!;
-        startOffset.left -= svgElemOffset.left;
-        startOffset.top -= svgElemOffset.top;
-        endOffset.left -= svgElemOffset.left;
-        endOffset.top -= svgElemOffset.top;
+        const svgRect = this.memoryOutlet.svgElem.find("svg")[0].getBoundingClientRect();
+        const pointerRect = pointerElem[0].getBoundingClientRect();
+        const targetRect = targetElem[0].getBoundingClientRect();
+        const startOffset = {
+            left: pointerRect.left + pointerRect.width / 2 - svgRect.left,
+            top: pointerRect.bottom - svgRect.top
+        };
+        const endOffset = {
+            left: targetRect.left + targetRect.width / 2 - svgRect.left,
+            top: targetRect.top + targetRect.height / 2 - svgRect.top
+        };
 
         return { startOffset, endOffset };
     }

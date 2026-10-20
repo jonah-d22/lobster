@@ -325,8 +325,8 @@ export class SimulationOutlet {
     }
     
     
-    private async runToEnd() {
-        if (!this.sim) { return; }
+    public async runToEnd(): Promise<Simulation | undefined> {
+        if (!this.sim) { return undefined; }
         this.runningProgressElem.css("visibility", "visible");
         
 
@@ -338,7 +338,7 @@ export class SimulationOutlet {
         
         // this.sim.speed = 1;
         await this.simRunner!.stepToEndOfMain();
-        await this.refreshCompletedMemoryCheck();
+        const checkedSimulation = await this.refreshCompletedMemoryCheck();
         this.pause();
 
 
@@ -350,12 +350,13 @@ export class SimulationOutlet {
             //    restart: true
             //}, false);
         this.runningProgressElem.css("visibility", "hidden");
+            return checkedSimulation;
     }
 
-    private async refreshCompletedMemoryCheck() {
-        if (!this.sim) {
-            return;
-        }
+    private async refreshCompletedMemoryCheck(): Promise<Simulation | undefined> {
+            if (!this.sim) {
+                return undefined;
+            }
 
         const checkSimulation = this.sim.clone();
         const checkRunner = new AsynchronousSimulationRunner(checkSimulation);
@@ -363,6 +364,7 @@ export class SimulationOutlet {
             await checkRunner.stepForward();
         }
         this.memcheckContentsElem.text(checkSimulation.getMemoryCheckDisplay());
+        return checkSimulation;
     }
         
     // private async skipToEnd() {
@@ -951,8 +953,6 @@ export class CodeStackOutlet extends RunningCodeOutlet {
         }
     }
 }
-
-
 
 
 

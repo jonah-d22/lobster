@@ -1,158 +1,177 @@
-import { SimulationOutlet } from "./simOutlets";
-import { ProjectEditor, CompilationOutlet, CompilationStatusOutlet } from "./editors";
 import { Simulation } from "../core/runtime/Simulation";
-import { MessageResponses, listenTo, stopListeningTo, messageResponse, Message } from "../util/observe";
-import { Mutable } from "../util/util";
-import { RuntimeConstruct } from "../core/constructs/CPPConstruct";
+import { Memory } from "../core/runtime/Memory";
 import { Project } from "../core/Project";
-import { InstantMemoryDiagramOutlet } from "./InstantMemoryDiagramOutlet";
+import { SourceFile } from "../core/compilation/Program";
+import { SimulationOutlet } from "./simOutlets";
+import { ProjectEditor } from "./editors";
+import { MEMORY_LEAK_EXERCISES } from "../frontend/memory_leak_exercises";
 
-
+type AnswerState = "editing" | "showing-result";
 
 export class SimpleExerciseLobsterOutlet {
 
-  public projectEditor: ProjectEditor;
-  private simulationOutlet: SimulationOutlet;
-  private instantMemoryDiagramOutlet: InstantMemoryDiagramOutlet;
-  private isInstantMemoryDiagramActive: boolean;
+    public readonly projectEditor: ProjectEditor;
+    private readonly simulationOutlet: SimulationOutlet;
+    public readonly project: Project;
 
-  public readonly project: Project;
+    private readonly element: JQuery;
+    private readonly codeArea: JQuery;
+    private readonly exerciseTitleElem: JQuery;
+    private readonly exercisePromptElem: JQuery;
+    private readonly feedbackElem: JQuery;
+    private readonly submitButton: JQuery;
+    private exerciseIndex = 0;
+    private answerState: AnswerState = "editing";
 
-  public readonly sim?: Simulation;
+    public constructor(element: JQuery, project: Project) {
+        this.element = element;
+        this.project = project;
+        this.codeArea = element.find(".memory-leak-code-area");
+        this.exerciseTitleElem = element.find(".memory-leak-exercise-title");
+        this.exercisePromptElem = element.find(".memory-leak-exercise-prompt");
+        this.feedbackElem = element.find(".memory-leak-feedback");
+        this.submitButton = element.find(".memory-leak-submit");
 
-  private readonly element: JQuery;
-  private readonly tabsElem: JQuery;
-  private readonly sourceTabElem: JQuery;
-  private readonly simulateTabElem: JQuery;
-  // private readonly annotationMessagesElem: JQuery;
-  public readonly compilationOutlet: CompilationOutlet;
-  public readonly compilationStatusOutlet: CompilationStatusOutlet;
+        this.projectEditor = new ProjectEditor(this.codeArea, project);
+        this.simulationOutlet = new SimulationOutlet(element.find(".lobster-sim-pane"));
+        this.simulationOutlet.memoryOutlet.setMemory(new Memory());
+        this.showExercise();
 
-  public _act!: MessageResponses;
+        this.submitButton.on("click", () => {
+            if (this.answerState === "showing-result") {
+                this.nextExercise();
+            }
+            else {
+                void this.submitAnswer();
+            }
+        });
+    }
 
-  public constructor(element: JQuery, project: Project) {
-    this.element = element;
-    // Set up simulation and source tabs
-    // var sourceTab = element.find(".sourceTab");
-    // var simTab = element.find(".simTab");
-    this.tabsElem = element.find(".lobster-simulation-outlet-tabs");
+    private async submitAnswer() {
+        this.submitButton.prop("disabled", true).text("Simulating...");
+        this.feedbackElem.empty().hide();
+        this.clearSimulation();
+        this.project.recompile();
 
-    // TODO: HACK to make codeMirror refresh correctly when sourcePane becomes visible
-    this.tabsElem.find('a.lobster-source-tab').on("shown.bs.tab", () => {
-      this.projectEditor.refreshEditorView();
-    });
-
-    this.simulationOutlet = new SimulationOutlet(element.find(".lobster-sim-pane"));
-    this.sourceTabElem = element.find(".lobster-source-tab");
-    this.simulateTabElem = element.find(".lobster-simulate-tab");
-    this.setSimulationTabEnabled(false);
-
-    let runButtonElem = element.find(".runButton")
-      .click(() => {
-        let program = this.project.program;
-        if (program.isRunnable()) {
-          let sim = new Simulation(program);
-          while (!sim.globalAllocator.isDone) {
-            sim.stepForward(); // TODO: put this loop in simulation runners in function to skip stuff before main
-          }
-          this.setSimulation(sim);
+        if (!this.project.program.isRunnable()) {
+            const errors = this.project.program.notes.allNotes
+                .filter(note => note.kind === "error")
+                .map(note => note.message);
+            const details = errors.length > 0 ? ` ${errors.join(" ")}` : "";
+            this.showResult(false, `This code could not be simulated.${details}`);
+            return;
         }
-        this.simulateTabElem.tab("show");
-      }
-    );
 
-    
-    element.find(".lobster-return-to-source").on("click", () => {
-      this.clearSimulation();
-      this.element.find(".lobster-source-tab").tab("show");
-    });
+        const simulation = new Simulation(this.project.program);
+        while (!simulation.globalAllocator.isDone) {
+            simulation.stepForward();
+        }
 
-    this.projectEditor = new ProjectEditor(element.find(".lobster-source-pane"), project);
-    let co = element.find(".lobster-compilation-pane");
-    if (co.length === 0) { co = $("#lobster-compilation-pane"); }
-    this.compilationOutlet = new CompilationOutlet(co, project);
-    this.compilationStatusOutlet = new CompilationStatusOutlet(element.find(".compilation-status-outlet"), project);
-    let IMDOElem = element.find(".lobster-instant-memory-diagram");
-    this.instantMemoryDiagramOutlet = new InstantMemoryDiagramOutlet(IMDOElem, project, false);
-    this.isInstantMemoryDiagramActive = false;
-
-    element.find(".lobster-instant-memory-diagram-buttons button").on("click", () => {
-      ["active", "btn-default", "btn-primary"].forEach(c => element.find(".lobster-instant-memory-diagram-buttons button").toggleClass(c)
-      );
-      this.isInstantMemoryDiagramActive = !this.isInstantMemoryDiagramActive;
-      this.instantMemoryDiagramOutlet.setActive(this.isInstantMemoryDiagramActive);
-      if (this.isInstantMemoryDiagramActive) {
-        IMDOElem.show();
-      }
-      else {
-        IMDOElem.hide();
-      }
-    });
-
-    this.project = project;
-  }
-
-  public setProject(project: Project) {
-    (<Mutable<this>>this).project = project;
-
-    this.projectEditor.setProject(project);
-    this.compilationOutlet.setProject(project);
-    this.compilationStatusOutlet.setProject(project);
-    this.instantMemoryDiagramOutlet.setProject(project);
-
-    return this.project;
-  }
-
-  public setSimulation(sim: Simulation) {
-    this.clearSimulation();
-    (<Mutable<this>>this).sim = sim;
-    listenTo(this, sim);
-
-    this.simulationOutlet.setSimulation(sim);
-    this.setSimulationTabEnabled(true);
-  }
-
-  public clearSimulation() {
-    this.setSimulationTabEnabled(false);
-    this.simulationOutlet.clearSimulation();
-
-    if (this.sim) {
-      stopListeningTo(this, this.sim);
+        try {
+            this.codeArea.addClass("is-simulating");
+            this.simulationOutlet.setSimulation(simulation);
+            const checkedSimulation = await this.simulationOutlet.runToEnd();
+            if (!checkedSimulation) {
+                throw new Error("The memory check did not complete.");
+            }
+            const passed = checkedSimulation.memoryIssues.length === 0;
+            this.showResult(
+                passed,
+                passed
+                    ? "Correct! The program finishes without modeled memory issues."
+                    : "Not quite. The simulation still reports a memory issue."
+            );
+        }
+        catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.showResult(false, `The simulation could not finish: ${message}`);
+        }
     }
-    delete (<Mutable<this>>this).sim;
-  }
 
-  // private hideAnnotationMessage() {
-  //     this.annotationMessagesElem.css("top", "125px");
-  //     if (this.afterAnnotation.length > 0) {
-  //         this.afterAnnotation.forEach(fn => fn());
-  //         this.afterAnnotation.length = 0;
-  //     }
-  // }
-  @messageResponse("requestFocus")
-  protected requestFocus(msg: Message<undefined>) {
-    if (msg.source === this.projectEditor) {
-      this.tabsElem.find('a.lobster-source-tab').tab("show");
+    private clearSimulation() {
+        this.simulationOutlet.clearSimulation();
+        this.codeArea.removeClass("is-simulating");
+        this.simulationOutlet.memoryOutlet.setMemory(new Memory());
     }
-  }
 
+    private showResult(passed: boolean, message: string) {
+        this.answerState = "showing-result";
+        this.feedbackElem
+            .removeClass("memory-leak-feedback-correct memory-leak-feedback-incorrect")
+            .addClass(passed ? "memory-leak-feedback-correct" : "memory-leak-feedback-incorrect")
+            .text(message)
+            .show();
 
-  @messageResponse("beforeStepForward")
-  protected beforeStepForward(msg: Message<RuntimeConstruct>) {
-    var oldGets = $(".code-memoryObject .get");
-    var oldSets = $(".code-memoryObject .set");
-    setTimeout(() => {
-      oldGets.removeClass("get");
-      oldSets.removeClass("set");
-    }, 300);
-  }
+        if (!passed) {
+            this.feedbackElem.append(
+                $("<h3></h3>").text("Possible solution"),
+                this.renderSolution()
+            );
+        }
 
-  setSimulationTabEnabled(isEnabled: boolean) {
-    if (isEnabled) {
-      this.simulateTabElem.parent().removeClass("disabled");
+        const isLastExercise = this.exerciseIndex === MEMORY_LEAK_EXERCISES.length - 1;
+        this.submitButton
+            .prop("disabled", false)
+            .text(isLastExercise ? "Play again" : "Next");
+
+        window.requestAnimationFrame(() => this.simulationOutlet.memoryOutlet.refreshSvg());
     }
-    else {
-      this.simulateTabElem.parent().addClass("disabled");
+
+    private renderSolution() {
+        const exercise = MEMORY_LEAK_EXERCISES[this.exerciseIndex];
+        const additions = new Map<string, number>();
+        exercise.addedLines.forEach(line => additions.set(line, (additions.get(line) || 0) + 1));
+
+        const code = exercise.solution.split("\n").map(line => {
+            const count = additions.get(line) || 0;
+            if (count > 0) {
+                additions.set(line, count - 1);
+                return `<span class="memory-leak-solution-added">${this.escapeHtml(line)}</span>`;
+            }
+            return this.escapeHtml(line);
+        }).join("\n");
+
+        return $("<pre class='memory-leak-solution'></pre>").html(code);
     }
-  }
+
+    private escapeHtml(text: string) {
+        return text.replace(/[&<>"']/g, character => {
+            const replacements: {[key: string]: string} = {
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                "\"": "&quot;",
+                "'": "&#39;"
+            };
+            return replacements[character];
+        });
+    }
+
+    private nextExercise() {
+        this.clearSimulation();
+        this.answerState = "editing";
+        this.feedbackElem.empty().hide();
+
+        if (this.exerciseIndex === MEMORY_LEAK_EXERCISES.length - 1) {
+            this.exerciseIndex = 0;
+        }
+        else {
+            ++this.exerciseIndex;
+        }
+
+        this.showExercise();
+    }
+
+    private showExercise() {
+        const exercise = MEMORY_LEAK_EXERCISES[this.exerciseIndex];
+        this.exerciseTitleElem.text(`Exercise ${this.exerciseIndex + 1} of ${MEMORY_LEAK_EXERCISES.length}: ${exercise.title}`);
+        this.exercisePromptElem.text(exercise.prompt);
+        this.project.setFileContents(new SourceFile("main.cpp", exercise.code));
+        this.project.recompile();
+        this.projectEditor.refreshEditorView();
+
+        this.submitButton
+            .prop("disabled", false)
+            .html('<span class="glyphicon glyphicon-play-circle"></span> Check &amp; Simulate');
+    }
 }
