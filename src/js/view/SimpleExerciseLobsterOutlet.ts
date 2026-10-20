@@ -5,7 +5,6 @@ import { MessageResponses, listenTo, stopListeningTo, messageResponse, Message }
 import { Mutable } from "../util/util";
 import { RuntimeConstruct } from "../core/constructs/CPPConstruct";
 import { Project } from "../core/Project";
-import { CheckpointsOutlet } from "./CheckpointOutlets";
 import { InstantMemoryDiagramOutlet } from "./InstantMemoryDiagramOutlet";
 
 
@@ -28,7 +27,6 @@ export class SimpleExerciseLobsterOutlet {
   // private readonly annotationMessagesElem: JQuery;
   public readonly compilationOutlet: CompilationOutlet;
   public readonly compilationStatusOutlet: CompilationStatusOutlet;
-  public readonly checkpointsOutlet: CheckpointsOutlet;
 
   public _act!: MessageResponses;
 
@@ -74,7 +72,6 @@ export class SimpleExerciseLobsterOutlet {
     if (co.length === 0) { co = $("#lobster-compilation-pane"); }
     this.compilationOutlet = new CompilationOutlet(co, project);
     this.compilationStatusOutlet = new CompilationStatusOutlet(element.find(".compilation-status-outlet"), project);
-    this.checkpointsOutlet = new CheckpointsOutlet(element.find(".lobster-ex-checkpoints"), project.exercise);
     let IMDOElem = element.find(".lobster-instant-memory-diagram");
     this.instantMemoryDiagramOutlet = new InstantMemoryDiagramOutlet(IMDOElem, project, false);
     this.isInstantMemoryDiagramActive = false;
@@ -101,7 +98,6 @@ export class SimpleExerciseLobsterOutlet {
     this.projectEditor.setProject(project);
     this.compilationOutlet.setProject(project);
     this.compilationStatusOutlet.setProject(project);
-    this.checkpointsOutlet.setExercise(project.exercise);
     this.instantMemoryDiagramOutlet.setProject(project);
 
     return this.project;

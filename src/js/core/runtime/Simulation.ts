@@ -5,8 +5,8 @@ import { Memory } from "./Memory";
 import { RuntimeConstruct } from "../constructs/CPPConstruct";
 import { RuntimeGlobalObjectAllocator } from "../constructs/GlobalObjectAllocator";
 import { CPPRandom, Mutable, escapeString, asMutable, assertNever, assert } from "../../util/util";
-import { DynamicObject, MainReturnObject } from "./objects";
-import { Int, PointerType, Char, CompleteObjectType, AtomicType, FunctionType, PotentiallyCompleteObjectType, ReferenceType, ReferredType, ArithmeticType, AnalyticArithmeticType, isType, isIntegralType, IntegralType, SuccessParsingResult, ErrorParsingResult } from "../compilation/types";
+import { CPPObject, DynamicObject, MainReturnObject } from "./objects";
+import { Int, PointerType, Char, CompleteObjectType, CompleteClassType, BoundedArrayType, AtomicType, FunctionType, PotentiallyCompleteObjectType, ReferenceType, ReferredType, ArithmeticType, AnalyticArithmeticType, isType, isIntegralType, IntegralType, SuccessParsingResult, ErrorParsingResult, toHexadecimalString } from "../compilation/types";
 import { Initializer } from "../constructs/initializers/Initializer";
 import { RuntimeDirectInitializer } from "../constructs/initializers/DirectInitializer";
 import { PassByReferenceParameterEntity, PassByValueParameterEntity } from "../compilation/entities";
@@ -67,6 +67,12 @@ export type SimulationOutput =
     CoutOutput |
     CinEchoOutput;
 
+export interface MemoryIssue {
+    kind: string;
+    message: string;
+    address?: number;
+}
+
 export type SimulationMessages =
     "started" |
     "reset" |
@@ -114,6 +120,11 @@ export class Simulation {
     public readonly actionsTaken: readonly SimulationAction[] = this._actionsTaken;
     public readonly allOutput: string;
     public readonly outputProduced: readonly SimulationOutput[] = [];
+    private readonly _memoryIssues: MemoryIssue[] = [];
+    public readonly memoryIssues: readonly MemoryIssue[] = this._memoryIssues;
+    private readonly _unreachableAllocations: DynamicObject[] = [];
+    private readonly _allocationsAtMemoryCheck: DynamicObject[] = [];
+    private readonly _reachableAtMemoryCheck: DynamicObject[] = [];
 
     public readonly cin: StandardInputStream;
 
@@ -171,6 +182,9 @@ export class Simulation {
         this.isPaused = true;
         this.stepsTaken = 0;
         this._actionsTaken.length = 0;
+        this._memoryIssues.length = 0;
+        Object.values(this._eventsOccurred).forEach(events => events.length = 0);
+        this.memoryLeaksRecorded = false;
         this.atEnd = false;
         this.isBlockingUntilCin = false;
 
@@ -196,6 +210,12 @@ export class Simulation {
 
         this.pendingNews.length = 0;
         this.leakCheckIndex = 0;
+        this._memoryIssues.length = 0;
+        this._unreachableAllocations.length = 0;
+        this._allocationsAtMemoryCheck.length = 0;
+        this._reachableAtMemoryCheck.length = 0;
+        Object.values(this._eventsOccurred).forEach(events => events.length = 0);
+        this.memoryLeaksRecorded = false;
 
         let _this = <Mutable<this>>this;
         _this.isPaused = true;
@@ -343,6 +363,9 @@ export class Simulation {
         // be different if rt popped itself off the stack. upNext also checks
         // to see if the simulation is done.
         this.upNext();
+        if (this.isMainReturned()) {
+            this.recordUnreachableAllocations();
+        }
 
         this.observable.send("afterFullStep", this.execStack.length > 0 && this.execStack[this.execStack.length - 1]);
     }
@@ -357,6 +380,7 @@ export class Simulation {
             // Check to see if simulation is done
             if (!rt) {
                 (<Mutable<this>>this).atEnd = true;
+                this.recordUnreachableAllocations();
                 this.observable.send("atEnded");
                 return;
             }
@@ -615,8 +639,138 @@ export class Simulation {
         this.observable.send("eventOccurred", { event, message });
     }
 
+    public memoryIssueOccurred(kind: string, message: string, event: SimulationEvent = SimulationEvent.UNDEFINED_BEHAVIOR, address?: number) {
+        this._memoryIssues.push({ kind, message, address });
+        this.eventOccurred(event, message);
+    }
+
     public hasEventOccurred(event: SimulationEvent) {
         return this.eventsOccurred[event].length > 0;
+    }
+
+    public getMemoryCheckSummary(): string {
+        const liveHeapObjects = Object.values(this.memory.heap.objectMap).filter(obj => obj.isAlive);
+        const reachableObjects = this.getReachableHeapObjects(liveHeapObjects);
+        const allocations = this.memoryLeaksRecorded ? this._allocationsAtMemoryCheck : liveHeapObjects;
+        const reachableCount = this.memoryLeaksRecorded ? this._reachableAtMemoryCheck.length : reachableObjects.size;
+        const unreachableObjects = this.memoryLeaksRecorded
+            ? this._unreachableAllocations
+            : liveHeapObjects.filter(obj => !reachableObjects.has(obj));
+        const hasEndOfMainSnapshot = this.memoryLeaksRecorded;
+        const unreachableBytes = unreachableObjects.reduce((total, obj) => total + obj.size, 0);
+
+        return [
+            'Lobster Memory Check (simulated memory model)',
+            hasEndOfMainSnapshot
+                ? 'End-of-main snapshot after local cleanup; static cleanup has not completed.'
+                    : 'Execution is in progress; allocation findings are provisional.',
+            `${this.memoryLeaksRecorded ? 'Heap allocations at end of main' : 'Live heap allocations'}: ${allocations.length} blocks (${allocations.reduce((total, obj) => total + obj.size, 0)} modeled bytes)`,
+            hasEndOfMainSnapshot
+                ? `Unreachable at end of main: ${unreachableObjects.length} blocks (${unreachableBytes} modeled bytes)`
+                : `Currently unreachable: ${unreachableObjects.length} blocks (${unreachableBytes} modeled bytes)`,
+            `${this.memoryLeaksRecorded ? 'Reachable at end of main' : 'Reachable from modeled roots'}: ${reachableCount} blocks`,
+            '',
+            `Memory issues detected: ${this.memoryIssues.length}`,
+            ...(this.memoryIssues.length
+                ? this.memoryIssues.map(issue => `- ${issue.kind}: ${issue.message}`)
+                : ['No modeled memory issues detected.']),
+            ...(!hasEndOfMainSnapshot && unreachableObjects.length
+                ? ['', 'Potentially unreachable allocations:', ...unreachableObjects.map(obj => `- ${obj.type} at ${toHexadecimalString(obj.address)}`)]
+                : []),
+        ].join('\n');
+    }
+
+    public getMemoryCheckDisplay(): string {
+        const addresses = [...new Set(this.memoryIssues
+            .map(issue => issue.address)
+            .filter((address): address is number => address !== undefined))]
+            .map(toHexadecimalString);
+
+        return [
+            `Memory issues detected: ${this.memoryIssues.length}`,
+            `Addresses: ${addresses.length ? addresses.join(', ') : 'none'}`
+        ].join('\n');
+    }
+
+    private memoryLeaksRecorded = false;
+
+    private isMainReturned() {
+        return this.top()?.model === this.program.mainFunction;
+    }
+
+    private recordUnreachableAllocations() {
+        if (this.memoryLeaksRecorded) {
+            return;
+        }
+
+        const allocations = Object.values(this.memory.heap.objectMap).filter(obj => obj.isAlive);
+        const reachable = this.getReachableHeapObjects(allocations);
+        this._allocationsAtMemoryCheck.push(...allocations);
+        this._reachableAtMemoryCheck.push(...reachable);
+        allocations.filter(obj => !reachable.has(obj)).forEach(obj => {
+            this._unreachableAllocations.push(obj);
+            const message = `Unreachable heap allocation of ${obj.type} at ${toHexadecimalString(obj.address)}.`;
+            this._memoryIssues.push({ kind: 'memory leak', message, address: obj.address });
+            this.eventOccurred(SimulationEvent.MEMORY_LEAK, message);
+        });
+        this.memoryLeaksRecorded = true;
+    }
+
+    private getReachableHeapObjects(allocations: DynamicObject[]): Set<DynamicObject> {
+        const allocationsByAddress = (address: number) => allocations.find(obj =>
+            obj.address <= address && address < obj.address + obj.size
+        );
+        const reachable = new Set<DynamicObject>();
+        const visited = new Set<number>();
+
+        const visit = (object: CPPObject) => {
+            if (!object.isAlive || visited.has(object.objectId)) {
+                return;
+            }
+            visited.add(object.objectId);
+
+            if (object.type.isAtomicType()) {
+                const value = object.getValue() as Value;
+                if (!value.isValid || !value.type.isPointerType() || PointerType.isNull(value.rawValue)) {
+                    return;
+                }
+
+                const pointerType = value.type;
+                const target = pointerType.isArrayPointerType()
+                    ? pointerType.arrayObject
+                    : pointerType.isObjectPointerType()
+                        ? pointerType.pointedObject
+                        : undefined;
+                const allocation = allocationsByAddress(target?.address ?? value.rawValue);
+                if (allocation) {
+                    reachable.add(allocation);
+                    visit(allocation);
+                }
+                return;
+            }
+
+            if (object.type.isBoundedArrayType()) {
+                (object as CPPObject<BoundedArrayType>).getArrayElemSubobjects().forEach(visit);
+                return;
+            }
+
+            if (object.type.isCompleteClassType()) {
+                const classObject = object as CPPObject<CompleteClassType>;
+                const baseObject = classObject.getBaseSubobject();
+                if (baseObject) {
+                    visit(baseObject);
+                }
+                classObject.type.classDefinition.memberObjectEntities.forEach(entity => {
+                    const member = classObject.getMemberObject(entity.name);
+                    if (member) {
+                        visit(member);
+                    }
+                });
+            }
+        };
+
+        this.memory.getMemoryCheckRoots().forEach(visit);
+        return reachable;
     }
 
     public printState() {
@@ -778,4 +932,3 @@ export class Simulation {
     //     return true;
     // },
 }
-

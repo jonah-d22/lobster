@@ -90,12 +90,13 @@ export class MemoryOutlet {
         (<Mutable<this>>this).memory = memory;
         listenTo(this, memory);
 
-        (<Mutable<this>>this).temporaryObjectsOutlet = new TemporaryObjectsOutlet($("<div></div>").appendTo(this.element), memory, this);
         (<Mutable<this>>this).stackFramesOutlet = new StackFramesOutlet($("<div></div>").appendTo(this.element), memory, this);
         (<Mutable<this>>this).heapOutlet = new HeapOutlet($("<div></div>").appendTo(this.element), memory, this);
+        (<Mutable<this>>this).temporaryObjectsOutlet = new TemporaryObjectsOutlet($("<div></div>").appendTo(this.element), memory, this);
 
         // Since the simulation has already started, some objects will already be allocated
         memory.allLiveObjects().forEach(obj => this.onObjectAllocated(obj));
+        this.element.scrollTop(0);
     }
 
     public clearMemory() {
@@ -189,7 +190,7 @@ export class SVGPointerArrowMemoryOverlay extends SVGMemoryOverlay {
             return false;
         }
 
-        let pointerElem = this.memoryOutlet.getObjectOutletById(this.object.objectId)?.objElem;
+        let pointerValueElem = this.memoryOutlet.getObjectOutletById(this.object.objectId)?.objElem;
 
         let targetElem: JQuery | undefined;
         if (this.object.type.isArrayPointerType()) {
@@ -211,12 +212,12 @@ export class SVGPointerArrowMemoryOverlay extends SVGMemoryOverlay {
             }
         }
 
-        if (!pointerElem || !targetElem) {
+        if (!pointerValueElem || !targetElem) {
             this.line.hide();
             return true;
         }
 
-        let { startOffset, endOffset } = this.getPointerArrowOffsets(pointerElem, targetElem);
+        let { startOffset, endOffset } = this.getPointerArrowOffsets(pointerValueElem, targetElem);
 
         this.line.plot(startOffset.left, startOffset.top, endOffset.left, endOffset.top);
         // this.line.marker("start", this.memoryOutlet.SVG_DEFS.arrowStart);
@@ -230,17 +231,10 @@ export class SVGPointerArrowMemoryOverlay extends SVGMemoryOverlay {
 
         let endOffset = targetElem.offset()!;
         endOffset.left += targetElem.outerWidth()! / 2;
-        //endOffset.top += targetElem.outerHeight();
+        endOffset.top += targetElem.outerHeight()! / 2;
         let startOffset = pointerElem.offset()!;
         startOffset.left += pointerElem.outerWidth()! / 2;
-
-        // If start is below end (greater offset), we move top of end to bottom.
-        if (startOffset.top > endOffset.top) {
-            endOffset.top += targetElem.outerHeight()!;
-        }
-        else {
-            startOffset.top += pointerElem.outerHeight()!;
-        }
+        startOffset.top += pointerElem.outerHeight()!;
 
         let svgElemOffset = this.memoryOutlet.svgElem.offset()!;
         startOffset.left -= svgElemOffset.left;

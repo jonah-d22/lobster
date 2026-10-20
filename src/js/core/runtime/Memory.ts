@@ -244,6 +244,25 @@ export class Memory {
         return Object.values(this.objects).filter(obj => obj.isAlive);
     }
 
+    public findDynamicObjectContainingAddress(address: number): DynamicObject | undefined {
+        return Object.values(this.objects).find((obj): obj is DynamicObject =>
+            obj.hasStorage("dynamic") && obj.address <= address && address < obj.address + obj.size
+        );
+    }
+
+    public getMemoryCheckRoots(): CPPObject[] {
+        const stackRoots = this.stack.frames.reduce(
+            (roots, frame) => roots.concat(frame.getMemoryCheckRoots()),
+            [] as CPPObject[]
+        );
+        return [
+            ...Object.values(this.staticObjects),
+            ...Object.values(this.stringLiteralMap),
+            ...Object.values(this.temporaryObjects),
+            ...stackRoots,
+        ].filter((obj): obj is CPPObject => !!obj && obj.isAlive);
+    }
+
     public allocateObject(object: CPPObject<CompleteObjectType>) {
         this.objects[object.address] = object;
         this.observable.send("objectAllocated", object);
@@ -534,6 +553,13 @@ export class MemoryFrame {
         this.localReferencesByEntityId[entity.entityId] = obj;
         obj.onReferenceBound(entity);
         this.observable.send("referenceBound", { entity: entity, object: obj });
+    }
+
+    public getMemoryCheckRoots(): CPPObject[] {
+        return [
+            ...this.localObjects,
+            ...Object.values(this.localReferencesByEntityId).filter((obj): obj is CPPObject => !!obj),
+        ].filter(obj => obj.isAlive);
     }
 
 }

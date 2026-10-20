@@ -1,6 +1,4 @@
-import { Checkpoint } from "../analysis/checkpoints";
 import { StaticAnalysisExtra } from "../analysis/extras";
-import { ExerciseSpecification } from "../exercises";
 import { listenTo, messageResponse, MessageResponses, Observable } from "../util/observe";
 import { Mutable, assert, asMutable } from "../util/util";
 import { Note } from "./compilation/errors";
@@ -36,8 +34,6 @@ export class Project {
     private translationUnitNames: Set<string> = new Set<string>();
 
     public readonly program: Program; // ! set by call to this.recompile() in ctor
-    
-    public readonly exercise: Exercise;
 
     public readonly extras: readonly StaticAnalysisExtra[];
 
@@ -46,10 +42,9 @@ export class Project {
     private pendingAutoCompileTimeout?: number;
     private autoCompileDelay?: number;
 
-    public constructor(name: string, id: number | undefined, files: readonly FileData[], exercise: Exercise, extras: readonly StaticAnalysisExtra[] = []) {
+    public constructor(name: string, id: number | undefined, files: readonly FileData[], extras: readonly StaticAnalysisExtra[] = []) {
         this.name = name;
         this.id = id;
-        this.exercise = exercise?.setProject(this);
         this.extras = extras;
 
         files.forEach(f => this.addFile(new SourceFile(f.name, f.code), f.isTranslationUnit));
@@ -150,8 +145,6 @@ export class Project {
         this.extras.forEach(extra => extra(this.program));
 
         this.observable.send("compilationFinished", this.program);
-
-        this.exercise.update();
     }
 
     public isTranslationUnit(name: string) {
@@ -235,89 +228,3 @@ export class Project {
     }
 }
 
-export type ExerciseMessages = 
-    "allCheckpointEvaluationStarted" |
-    "allCheckpointEvaluationFinished" |
-    "checkpointEvaluationFinished" |
-    "exerciseChanged";
-
-export type ExerciseCompletionPredicate = (ex: Exercise) => boolean;
-export const COMPLETION_LAST_CHECKPOINT = (ex: Exercise) => ex.checkpointCompletions[ex.checkpoints.length - 1];
-export const COMPLETION_ALL_CHECKPOINTS = (ex: Exercise) => ex.checkpointCompletions.every(status => status);
-
-export class Exercise {
-
-    public readonly project?: Project;
-
-    public readonly checkpoints: readonly Checkpoint[];
-
-    /** Whether or not each checkpoint has finished evaluating */
-    public readonly checkpointEvaluationsFinished: readonly boolean[];
-
-    /** Whether or not each checkpoint has passed */
-    public readonly checkpointCompletions: readonly boolean[];
-
-    public readonly completionMessage: string;
-
-    private completionCriteria: ExerciseCompletionPredicate;
-
-    public _act!: MessageResponses;
-    public observable = new Observable<ExerciseMessages>(this);
-
-    public constructor(spec: ExerciseSpecification) {
-        this.checkpoints = spec.checkpoints;
-        this.checkpointEvaluationsFinished = this.checkpoints.map(c => false);
-        this.checkpointCompletions = this.checkpoints.map(c => false);
-        this.completionCriteria = spec.completionCriteria;
-        this.completionMessage = spec.completionMessage;
-    }
-
-    public setProject(project: Project) {
-        assert(!this.project);
-        (<Mutable<this>>this).project = project;
-        return this;
-    }
-
-    public changeSpecification(spec: ExerciseSpecification) {
-        asMutable(this).checkpoints = spec.checkpoints;
-        asMutable(this).checkpointEvaluationsFinished = this.checkpoints.map(c => false);
-        asMutable(this).checkpointCompletions = this.checkpoints.map(c => false);
-        this.completionCriteria = spec.completionCriteria;
-        asMutable(this).completionMessage = spec.completionMessage;
-        this.observable.send("exerciseChanged", this);
-        this.update();
-    }
-
-    public async update() {
-        await this.evaluateCheckpoints();
-    }
-
-    private async evaluateCheckpoints() {
-        assert(this.project);
-
-        asMutable(this).checkpointEvaluationsFinished = this.checkpoints.map(c => false);
-        asMutable(this).checkpointCompletions = this.checkpoints.map(c => false);
-        this.observable.send("allCheckpointEvaluationStarted", this);
-
-        await Promise.all(this.checkpoints.map(
-            async (checkpoint, i) => {
-                try {
-                    let result = await checkpoint.evaluate(this.project!);
-                    asMutable(this.checkpointEvaluationsFinished)[i] = true;
-                    asMutable(this.checkpointCompletions)[i] = result;
-                    this.observable.send("checkpointEvaluationFinished", this);
-                    return result;
-                }
-                catch {
-                    return false; // TODO: this results in a false when interrupted - maybe I should let the interruption propagate?
-                }
-            }
-        ));
-
-        this.observable.send("allCheckpointEvaluationFinished", this);
-    }
-
-    public get isComplete() {
-        return this.completionCriteria(this);
-    }
-}

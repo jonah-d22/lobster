@@ -15,8 +15,8 @@ import { RuntimeFunctionIdentifierExpression } from "../core/constructs/expressi
 import { RuntimeAtomicDirectInitializer, RuntimeDirectInitializer } from "../core/constructs/initializers/DirectInitializer";
 import { RuntimeExpression } from "../core/constructs/expressions/RuntimeExpression";
 import { RuntimeFunction } from "../core/compilation/functions";
-import { Exercise, Project } from "../core/Project";
 import { IOState } from "../core/compilation/streams";
+import { Project } from "../core/Project";
 import { IstreamBufferOutlet } from "./IstreamBufferOutlet";
 import { TemporaryObjectsCustomization, StackFrameCustomization } from "./memory/StackFrameOutlet";
 import { MemoryOutlet } from "./memory/MemoryOutlet";
@@ -61,6 +61,7 @@ export class SimulationOutlet {
 
     private readonly consoleContentsElem: JQuery;
     private readonly cinEntryElem: JQuery;
+    private readonly memcheckContentsElem: JQuery;
 
     private breadcrumbs: number[] = [];
 
@@ -71,6 +72,7 @@ export class SimulationOutlet {
 
         this.runningProgressElem = findExactlyOne(element, ".runningProgress");
         this.consoleContentsElem = findExactlyOne(element, ".lobster-console-contents");
+        this.memcheckContentsElem = findExactlyOne(element, ".lobster-memcheck-contents");
         this.codeStackOutlet = new CodeStackOutlet(findExactlyOne(element, ".codeStack"));
         this.memoryOutlet = new MemoryOutlet(findExactlyOne(element, ".lobster-memory"));
         this.cinBufferOutlet = new IstreamBufferOutlet(findExactlyOne(element, ".lobster-cin-buffer"), "cin");
@@ -179,6 +181,7 @@ export class SimulationOutlet {
             out => out.kind === SimulationOutputKind.COUT
                 ? out.text
                 : `<span class="lobster-console-user-input">${out.text}</span>`).join(""));
+        this.refreshMemcheckReport();
     }
     
     public clearSimulation() {
@@ -192,6 +195,16 @@ export class SimulationOutlet {
         delete (<Mutable<this>>this).sim;
         delete this.simRunner;
         this.breadcrumbs = [];
+        this.memcheckContentsElem.text('Waiting for execution…');
+    }
+
+    private refreshMemcheckReport() {
+        if (!this.sim) {
+            this.memcheckContentsElem.text('Waiting for execution…');
+            return;
+        }
+
+        this.memcheckContentsElem.text(this.sim.getMemoryCheckDisplay());
     }
 
     private refreshSimulation() {
@@ -227,6 +240,7 @@ export class SimulationOutlet {
         if (this.sim) {
             this.breadcrumbs = [];
         }
+        this.refreshMemcheckReport();
     }
     
     private async stepForward(n: number = 1) {
@@ -242,6 +256,7 @@ export class SimulationOutlet {
         // if (top instanceof RuntimeFunctionCall && top.model.func.firstDeclaration.context.isLibrary) {
         //     CPP_ANIMATIONS = false;
             await this.simRunner!.stepOverLibrary(n);
+        this.refreshMemcheckReport();
         //     CPP_ANIMATIONS = true;
         // }
         // else {
@@ -272,6 +287,7 @@ export class SimulationOutlet {
         
         // this.sim.speed = Simulation.MAX_SPEED;
         await this.simRunner!.stepOver();
+        this.refreshMemcheckReport();
 
         // setTimeout(function() {this.setAnimationsOn(true);}, 10);
         
@@ -295,6 +311,7 @@ export class SimulationOutlet {
         this.leaveBreadcrumb();
         
         await this.simRunner!.stepOut();
+        this.refreshMemcheckReport();
         
         // RuntimeConstruct.prototype.silent = false;
 
@@ -321,6 +338,7 @@ export class SimulationOutlet {
         
         // this.sim.speed = 1;
         await this.simRunner!.stepToEndOfMain();
+        await this.refreshCompletedMemoryCheck();
         this.pause();
 
 
@@ -332,6 +350,19 @@ export class SimulationOutlet {
             //    restart: true
             //}, false);
         this.runningProgressElem.css("visibility", "hidden");
+    }
+
+    private async refreshCompletedMemoryCheck() {
+        if (!this.sim) {
+            return;
+        }
+
+        const checkSimulation = this.sim.clone();
+        const checkRunner = new AsynchronousSimulationRunner(checkSimulation);
+        while (!checkSimulation.atEnd && checkSimulation.top()?.model !== checkSimulation.program.mainFunction) {
+            await checkRunner.stepForward();
+        }
+        this.memcheckContentsElem.text(checkSimulation.getMemoryCheckDisplay());
     }
         
     // private async skipToEnd() {
@@ -437,6 +468,8 @@ export class SimulationOutlet {
             this.consoleContentsElem.append(`<span class="lobster-console-error">${data.message + "\n"}</span>`);
             this.element.find(".console").scrollTop(this.element.find(".console")[0].scrollHeight);
         }
+
+        this.refreshMemcheckReport();
     }
     
     @messageResponse("reset")
@@ -448,6 +481,7 @@ export class SimulationOutlet {
         this.element.find(".simPane").focus();
         this.runningProgressElem.css("visibility", "hidden");
         this.consoleContentsElem.html("");
+        this.refreshMemcheckReport();
     }
 
     @messageResponse("atEnded")
@@ -457,6 +491,7 @@ export class SimulationOutlet {
             stepBackward: true
         },false);
         this.runningProgressElem.css("visibility", "hidden");
+        this.refreshMemcheckReport();
     }
 }
 
@@ -916,7 +951,6 @@ export class CodeStackOutlet extends RunningCodeOutlet {
         }
     }
 }
-
 
 
 
